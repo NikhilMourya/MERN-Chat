@@ -63,7 +63,6 @@ app.get('/profile',(req,res)=>{
 app.post('/login',async (req,res)=>{
     const {username,password} = req.body;
     const founduser = await user.findOne({username})
-    // console.log(founduser,'userfound');
 
     if(founduser){
       const passOK =   bcrypt.compareSync(password,founduser.password);
@@ -101,37 +100,73 @@ app.post('/register', async (req, res) => {
 
 })
 
-const server = app.listen('3000')
-const wsServer = new ws.WebSocketServer({server})
-wsServer.on('connection',(connection,req)=>{
-    const cookie= req.headers.cookie;
-    if(cookie){
-        const tokenCookingString = cookie.split(';').find(str=>str.startsWith('token='))
-        if(tokenCookingString)
-        {
-            const token = tokenCookingString.split('=')[1];
-            if(token){
-                jwt.verify(token,jwtSecret,{},(err,userData)=>{
-                    if(err) throw err;
-                    const {userId,username} = userData;
-                    connection.userId = userId;
-                    connection.userName = username;
-                })
+const server = app.listen('3000');
+const wsServer = new ws.WebSocketServer({server});
+
+function isOpen(ws) {
+     return ws.readyState === ws.OPEN 
+}
+
+if(isOpen(wsServer)){
+    wsServer.on('connection',(connection,req)=>{
+
+        //read username and cookie on connection
+        const cookie= req.headers.cookie;
+        if(cookie){
+            const tokenCookingString = cookie.split(';').find(str=>str.startsWith('token='))
+            if(tokenCookingString)
+            {
+                const token = tokenCookingString.split('=')[1];
+                if(token){
+                    jwt.verify(token,jwtSecret,{},(err,userData)=>{
+                        if(err) throw err;
+                        const {userId,username} = userData;
+                        connection.userId = userId;
+                        connection.userName = username;
+                    })
+                }
             }
+            
         }
         
-    }
-    [...wsServer.clients].forEach((client)=>{
+    
+        [...wsServer.clients].forEach((client)=>{
+            
+            client.send(JSON.stringify({
+    
+                onLine:[...wsServer.clients].map((name)=>({"id":name.userId ,"userName" : name.userName}))
+    
+            }))
+        })
+
+        connection.on('message', function(message) {
+            // console.log('received: %s', message);
+            const msgDAta = JSON.parse(message);
+
+            const {recipient,text} = msgDAta.message;
+            // console.log('received: %s', recipient,text);
+            if(recipient && text){
+                [...wsServer.clients].filter(c=>c.userId===recipient)
+                .forEach(usr=>{
+                    usr.send(JSON.stringify(text))
+                })
+            }
+        });
         
-        // console.log(client)
+        // ws.send('hello from the server!');
 
-        client.send(JSON.stringify({
-
-            onLine:[...wsServer.clients].map((name)=>({"id":name.userId ,"userName" : name.userName}))
-
-        }))
+        // ws.on('message',(msg)=>{
+        //     console.log(msg,'thid is message');
+        // })
+    
+    
     })
-})
-// wsServer.on('message')
+    
+    // wsServer.on('message',(msg)=>{
+    //     console.log(msg,'thid is message');
+    // })
+    
+}
+
 // nikhilmourya65
 // 7AA9cQuJqUYk8faT

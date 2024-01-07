@@ -10,14 +10,18 @@ export default function ChatView() {
   const {username,userId} = useContext(userContext);
   const [msg,setMsg] = useState('');
 
+  const [msgs,setMsgs] = useState([]);
+
   useEffect(() => {
     const ws = new WebSocket("ws://192.168.0.113:3000");
     setwsConnection(ws);
     ws.addEventListener("message", handleMessage);
+    
   }, []);
 
   function showOnline(users) {
     const peopleUnique = {};
+    console.log(users,'users');
     users.forEach(({ id, userName }) => {
       peopleUnique[id] = userName;
     });
@@ -27,6 +31,8 @@ export default function ChatView() {
   function handleMessage(e) {
     const msgData = JSON.parse(e.data);
     showOnline(msgData.onLine);
+    setMsgs(current=> ([...current,{text:msgData.text,isMy:false}]))
+    // console.log(msgs);
   }
 
   function selectContact(userId){
@@ -38,12 +44,15 @@ export default function ChatView() {
   
   function sendMsg(ev){
     ev.preventDefault();
-    ws.send(JSON.stringify({
+    wsConnection.send(JSON.stringify({
       message:{
         recipient : selectedUserid,
         text:msg,
       }
     }))
+    setMsg('');
+    setMsgs(current=> ([...current,{text:msg,isMy:true}]))
+    // console.log(msgs);
   }
 
   
@@ -84,7 +93,18 @@ export default function ChatView() {
               </div>
             )}
             {selectedUserid && (
+              <>
               <div className="flex items-center">Chat With {selectedUserid}</div>
+              <div className="container px-2">
+                {
+                msgs.map((msg)=>{
+                  return(
+                    <div>{msg.text}</div>
+                  )
+                })
+                }
+              </div>
+              </>
             )}
           </div>
           {!!selectedUserid && (
