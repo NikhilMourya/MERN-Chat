@@ -21,7 +21,6 @@ export default function ChatView() {
 
   function showOnline(users) {
     const peopleUnique = {};
-    console.log(users,'users');
     users.forEach(({ id, userName }) => {
       peopleUnique[id] = userName;
     });
@@ -30,9 +29,12 @@ export default function ChatView() {
 
   function handleMessage(e) {
     const msgData = JSON.parse(e.data);
-    showOnline(msgData.onLine);
     setMsgs(current=> ([...current,{text:msgData.text,isMy:false}]))
-    // console.log(msgs);
+    console.log(msgData);
+    if(msgData.onLine){
+      showOnline(msgData.onLine);
+    }
+    
   }
 
   function selectContact(userId){
@@ -52,7 +54,7 @@ export default function ChatView() {
     }))
     setMsg('');
     setMsgs(current=> ([...current,{text:msg,isMy:true}]))
-    // console.log(msgs);
+    
   }
 
   
@@ -99,7 +101,7 @@ export default function ChatView() {
                 {
                 msgs.map((msg)=>{
                   return(
-                    <div>{msg.text}</div>
+                    <div className="msg bg-slate-400 px-2 mx-2 rounded">{msg.text}</div>
                   )
                 })
                 }

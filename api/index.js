@@ -3,6 +3,7 @@ const app = express();
 const dotenv = require('dotenv').config()
 const mongoose = require('mongoose');
 const user = require('./model/users')
+const Messages = require('./model/message')
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -139,16 +140,22 @@ if(isOpen(wsServer)){
             }))
         })
 
-        connection.on('message', function(message) {
-            // console.log('received: %s', message);
+        connection.on('message' , async function(message) {
             const msgDAta = JSON.parse(message);
-
             const {recipient,text} = msgDAta.message;
-            // console.log('received: %s', recipient,text);
             if(recipient && text){
+               const msgDoc =  await Messages.create({
+                    sender:connection.userId,
+                    recipient,
+                    text
+                });
+
                 [...wsServer.clients].filter(c=>c.userId===recipient)
                 .forEach(usr=>{
-                    usr.send(JSON.stringify(text))
+                    usr.send(JSON.stringify({text,
+                        sender:connection.userId,
+                        id:msgDoc._id
+                    }))
                 })
             }
         });
