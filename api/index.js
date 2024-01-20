@@ -150,10 +150,12 @@ if(isOpen(wsServer)){
                     text
                 });
 
-                [...wsServer.clients].filter(c=>c.userId===recipient)
+                [...wsServer.clients]
+                .filter(c=>c.userId===recipient)
                 .forEach(usr=>{
                     usr.send(JSON.stringify({text,
                         sender:connection.userId,
+                        recipient,
                         id:msgDoc._id
                     }))
                 })

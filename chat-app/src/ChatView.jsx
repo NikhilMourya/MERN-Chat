@@ -2,6 +2,8 @@ import { useContext, useEffect, useState } from "react";
 import Avatar from "./Avatar";
 import { userContext } from "./userContext";
 
+import { uniqBy } from "lodash";
+
 export default function ChatView() {
   const [wsConnection, setwsConnection] = useState(null);
 
@@ -29,10 +31,11 @@ export default function ChatView() {
 
   function handleMessage(e) {
     const msgData = JSON.parse(e.data);
-    setMsgs(current=> ([...current,{text:msgData.text,isMy:false}]))
-    console.log(msgData);
     if(msgData.onLine){
       showOnline(msgData.onLine);
+    } else if('text' in msgData){
+      // console.log(msgData,'recoeved msg')
+      setMsgs(current=> ([...current,{...msgData}]))
     }
     
   }
@@ -47,15 +50,17 @@ export default function ChatView() {
   function sendMsg(ev){
     ev.preventDefault();
     wsConnection.send(JSON.stringify({
-      message:{
-        recipient : selectedUserid,
-        text:msg,
-      }
+      message:{text:msg,isMy:true,sender:userId,recipient:selectedUserid}
     }))
     setMsg('');
-    setMsgs(current=> ([...current,{text:msg,isMy:true}]))
+    console.log(msgs,'msgs')
+    setMsgs(current=> ([...current,{text:msg,isMy:true,sender:userId,recipient:selectedUserid}]))
     
   }
+
+  
+  let messageWithoutDuplicates = uniqBy(msgs,'text') ;
+  console.log(messageWithoutDuplicates,'uniqu')
 
   
   return (
@@ -99,9 +104,10 @@ export default function ChatView() {
               <div className="flex items-center">Chat With {selectedUserid}</div>
               <div className="container px-2">
                 {
-                msgs.map((msg)=>{
-                  return(
-                    <div className="msg bg-slate-400 px-2 mx-2 rounded">{msg.text}</div>
+                messageWithoutDuplicates.map((msg)=>{
+                  return (
+                    <div className={"p-2 rounded"+msg.sender===userId ? 'bg-blue-300 text-white' : 'bg-white text-grey-300'}>
+                      {msg.sender===userId ? 'Me : ' : ''}{msg.text}</div>
                   )
                 })
                 }
