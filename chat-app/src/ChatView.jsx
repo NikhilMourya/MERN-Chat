@@ -1,25 +1,36 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import Avatar from "./Avatar";
 import { userContext } from "./userContext";
 
 import { uniqBy } from "lodash";
+// import * as axios  from "axios";
+import axios, * as others from 'axios';
 
 export default function ChatView() {
   const [wsConnection, setwsConnection] = useState(null);
 
   const [onlinePeps, setOnlinePeps] = useState({});
-  const [selectedUserid,SetSelectedUserId] = useState("");
-  const {username,userId} = useContext(userContext);
-  const [msg,setMsg] = useState('');
+  const [selectedUserid, SetSelectedUserId] = useState("");
+  const { username, userId } = useContext(userContext);
+  const [msg, setMsg] = useState("");
+  const divUndermsg = useRef();
 
-  const [msgs,setMsgs] = useState([]);
+  const [msgs, setMsgs] = useState([]);
 
   useEffect(() => {
+    // const ws = new WebSocket("ws://192.168.0.113:3000");
+    // setwsConnection(ws);
+    // ws.addEventListener("message", handleMessage);
+    coneectToWs()
+  }, []);
+
+  //this function prevent the client from being disconnet from sockets using recursion
+  function coneectToWs(){
     const ws = new WebSocket("ws://192.168.0.113:3000");
     setwsConnection(ws);
     ws.addEventListener("message", handleMessage);
-    
-  }, []);
+    ws.addEventListener("close",coneectToWs)
+  }
 
   function showOnline(users) {
     const peopleUnique = {};
@@ -31,41 +42,67 @@ export default function ChatView() {
 
   function handleMessage(e) {
     const msgData = JSON.parse(e.data);
-    if(msgData.onLine){
+    if (msgData.onLine) {
       showOnline(msgData.onLine);
-    } else if('text' in msgData){
+    } else if ("text" in msgData) {
       // console.log(msgData,'recoeved msg')
-      setMsgs(current=> ([...current,{...msgData}]))
+      setMsgs((current) => [...current, { ...msgData,id:Date.now() }]);
     }
-    
   }
 
-  function selectContact(userId){
+  function selectContact(userId) {
     SetSelectedUserId(userId);
   }
 
-  const excludeMyId={...onlinePeps}
+  const excludeMyId = { ...onlinePeps };
   delete excludeMyId[userId];
-  
-  function sendMsg(ev){
+
+  function sendMsg(ev) {
     ev.preventDefault();
-    wsConnection.send(JSON.stringify({
-      message:{text:msg,isMy:true,sender:userId,recipient:selectedUserid}
-    }))
-    setMsg('');
-    console.log(msgs,'msgs')
-    setMsgs(current=> ([...current,{text:msg,isMy:true,sender:userId,recipient:selectedUserid}]))
-    
+    wsConnection.send(
+      JSON.stringify({
+        message: {
+          text: msg,
+          isMy: true,
+          sender: userId,
+          recipient: selectedUserid,
+        },
+      })
+    );
+    setMsg("");
+    setMsgs((current) => [
+      ...current,
+      { text: msg, isMy: true, sender: userId, recipient: selectedUserid, id : Date.now() },
+    ]);
+   
   }
 
-  
-  let messageWithoutDuplicates = uniqBy(msgs,'text') ;
-  console.log(messageWithoutDuplicates,'uniqu')
+  useEffect(()=>{
+    const div =  divUndermsg.current;
+    if(div){
+      div.scrollIntoView({behavior:'smooth'})
+    }
+   
+  },[msgs])
 
+  useEffect(()=>{
+    if(selectedUserid){
+      axios.get('http://192.168.0.113:3000/messages/'+selectedUserid)
+      .then((res)=>{
+        console.log(res,'msg response')
+        setMsgs(res.data)
+      })
+    }
   
+  },[selectedUserid])
+
+
+  let messageWithoutDuplicates = uniqBy(msgs, "_id");
+  console.log(messageWithoutDuplicates, "uniqu");
+
   return (
     <>
-      <div className="flex h-screen">
+      <div className="flex h-dvh">
         <div className="bg-white-100 w-1/3 pt-4">
           <div className="text-blue-500 font-bold flex gap-2 mb-4">
             <svg
@@ -84,9 +121,16 @@ export default function ChatView() {
           </div>
           <div>Logged In as {username}</div>
           {Object.keys(excludeMyId).map((userId) => {
-            return ( 
-              <div key={userId} onClick={()=>selectContact(userId)}  className={"pl-4 border-b border-gray-100 py-2 flex gap-2 items-center cursor-pointer "+(userId===selectedUserid ? 'bg-blue-50' : '')}>
-               <Avatar username={excludeMyId[userId]} userId={userId}/>
+            return (
+              <div
+                key={userId}
+                onClick={() => selectContact(userId)}
+                className={
+                  "pl-4 border-b border-gray-100 py-2 flex gap-2 items-center cursor-pointer " +
+                  (userId === selectedUserid ? "bg-blue-50" : "")
+                }
+              >
+                <Avatar username={excludeMyId[userId]} userId={userId} />
                 <span>{excludeMyId[userId]}</span>
               </div>
             );
@@ -101,48 +145,62 @@ export default function ChatView() {
             )}
             {selectedUserid && (
               <>
-              <div className="flex items-center">Chat With {selectedUserid}</div>
-              <div className="container px-2">
-                {
-                messageWithoutDuplicates.map((msg)=>{
-                  return (
-                    <div className={"p-2 rounded"+msg.sender===userId ? 'bg-blue-300 text-white' : 'bg-white text-grey-300'}>
-                      {msg.sender===userId ? 'Me : ' : ''}{msg.text}</div>
-                  )
-                })
-                }
-              </div>
+                <div className="relative h-full">
+                  <div className="container px-2 overflow-y-scroll absolute inset-0">
+                    {messageWithoutDuplicates.map((msg) => {
+                      return (
+                        <div
+                          className={
+                            msg.sender === userId ? "text-right" : "text-left"
+                          }
+                        >
+                          <div
+                            className={
+                              "p-2 my-2 rounded-md inline-block text-left " +
+                              (msg.sender === userId
+                                ? "bg-blue-300 text-white "
+                                : "bg-white text-grey-300 ")
+                            }
+                          >
+                            {msg.text}
+                          </div>
+                          <div ref={divUndermsg}></div>
+                        </div>
+                        
+                      );
+                    })}
+                  </div>
+                </div>
               </>
             )}
           </div>
           {!!selectedUserid && (
             <form className="flex gap-2 p-2" onSubmit={sendMsg}>
-            <input
-              type="text"
-              value={msg}
-              onChange={(e)=>setMsg(e.target.value)}
-              className="bg-white border px-2 flex-grow rounded rounded-sm"
-              placeholder="Type Your Message"
-            />
-            <button className="bg-blue-500 p-2 text-white" type="submit">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth="1.5"
-                stroke="currentColor"
-                className="w-6 h-6"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5"
-                />
-              </svg>
-            </button>
-          </form>
+              <input
+                type="text"
+                value={msg}
+                onChange={(e) => setMsg(e.target.value)}
+                className="bg-white border px-2 flex-grow rounded rounded-sm"
+                placeholder="Type Your Message"
+              />
+              <button className="bg-blue-500 p-2 text-white" type="submit">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth="1.5"
+                  stroke="currentColor"
+                  className="w-6 h-6"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5"
+                  />
+                </svg>
+              </button>
+            </form>
           )}
-          
         </div>
       </div>
     </>
