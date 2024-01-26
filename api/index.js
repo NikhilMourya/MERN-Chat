@@ -4,11 +4,13 @@ const dotenv = require('dotenv').config()
 const mongoose = require('mongoose');
 const user = require('./model/users')
 const Messages = require('./model/message')
+const userModel = require("./model/users");
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const bcrypt = require('bcryptjs');
 const ws = require('ws');
+
 
 
 
@@ -45,7 +47,6 @@ app.get('/test', (req, res) => {
 })
 
 app.get('/profile', (req, res) => {
-    // console.log(req.cookies);
     const token = req.cookies?.token;
     if (token) {
         jwt.verify(token, jwtSecret, {}, (err, result) => {
@@ -73,7 +74,7 @@ async function getUserDatafromRequest(req) {
                     result
                 );
             })
-        }else{
+        } else {
             reject('No Token Found')
         }
     })
@@ -81,19 +82,22 @@ async function getUserDatafromRequest(req) {
 }
 
 app.get('/messages/:userId', async (req, res) => {
-    const userData =  await getUserDatafromRequest(req);
-    console.log(userData);
-    const ourUSerId  = userData.userId; 
+    const userData = await getUserDatafromRequest(req);
+    const ourUSerId = userData.userId;
     const { userId } = req.params;
-    console.log(userId,ourUSerId);
-   
-   const msgs = await Messages.find({
-    sender:{$in:[userId,ourUSerId]},
-    recipient:{$in:[userId,ourUSerId]}
-   }).sort({createdAt:1})
 
-   res.json(msgs)
+    const msgs = await Messages.find({
+        sender: { $in: [userId, ourUSerId] },
+        recipient: { $in: [userId, ourUSerId] }
+    }).sort({ createdAt: 1 })
+
+    res.json(msgs)
     // res.json('test ok')
+})
+
+app.get('/users', async (req, res) => {
+    const users = await userModel.find({}, { '_id': 1, 'username': 1 })
+    res.json(users)
 })
 
 app.post('/login', async (req, res) => {
@@ -111,6 +115,10 @@ app.post('/login', async (req, res) => {
             })
         }
     }
+})
+
+app.post('/logout',async(req,res)=>{
+    res.cookie('token', '', { SameSite: 'None', secure: false }).json('ok')
 })
 
 app.post('/register', async (req, res) => {
@@ -146,6 +154,36 @@ function isOpen(ws) {
 if (isOpen(wsServer)) {
     wsServer.on('connection', (connection, req) => {
 
+        function notifyOnlineUser() {
+            [...wsServer.clients].forEach((client) => {
+
+                client.send(JSON.stringify({
+
+                    onLine: [...wsServer.clients].map((name) => ({ "id": name.userId, "userName": name.userName }))
+
+                }))
+            })
+        }
+
+        connection.isAlive = true;
+
+        connection.timer = setInterval(() => {
+            connection.ping();
+
+            connection.deathTimer = setTimeout(() => {
+                clearInterval(connection.timer)
+                connection.isAlive = false;
+                connection.terminate();
+                notifyOnlineUser();
+            }, 1000)
+
+        }, 5000)
+
+        connection.on('pong', () => {
+            clearInterval(connection.deathTimer);
+            // console.log('pong')
+        })
+
         //read username and cookie on connection
         const cookie = req.headers.cookie;
         if (cookie) {
@@ -165,25 +203,16 @@ if (isOpen(wsServer)) {
         }
 
 
-        [...wsServer.clients].forEach((client) => {
 
-            client.send(JSON.stringify({
-
-                onLine: [...wsServer.clients].map((name) => ({ "id": name.userId, "userName": name.userName }))
-
-            }))
-        })
 
         connection.on('message', async function (message) {
             const msgDAta = JSON.parse(message);
             const { recipient, text } = msgDAta.message;
-            console.log(msgDAta.message,'mesg data')
-
             if (recipient && text) {
                 const msgDoc = await Messages.create({
                     sender: connection.userId,
-                    recipient : recipient,
-                    text:text
+                    recipient: recipient,
+                    text: text
                 });
 
                 [...wsServer.clients]
@@ -198,21 +227,15 @@ if (isOpen(wsServer)) {
                     })
             }
         });
-
-        // ws.send('hello from the server!');
-
-        // ws.on('message',(msg)=>{
-        //     console.log(msg,'thid is message');
-        // })
-
-
+        notifyOnlineUser()
     })
-
-    // wsServer.on('message',(msg)=>{
-    //     console.log(msg,'thid is message');
-    // })
 
 }
 
+wsServer.on("close", (data) => {
+    console.log('discounnetec', data)
+})
+
 // nikhilmourya65
-// 7AA9cQuJqUYk8faT
+// 7AA9cQuJqUYk8faT\
+// {offlinePeps[offlineuserId].username}

@@ -17,7 +17,7 @@ export default function Register(){
                 setUserId(res.data?.id);
             })
         }else{
-            console.log('userNAme and Password required')
+            // console.log('userNAme and Password required')
         }
         
     }

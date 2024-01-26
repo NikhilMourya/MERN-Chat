@@ -9,10 +9,7 @@ export function UserContextProvider({children}){
     const [userId,setUserId] = useState(null);
 
     useEffect(()=>{
-        console.log(document.cookie,'cookies')
-        // debugger
         axios.get('http://192.168.0.113:3000/profile',{withCredentials:true}).then((res)=>{
-        //    console.log(res.data);
            setUserId(res.data.userId)
            setUserNameContext(res.data.username)
         })

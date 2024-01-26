@@ -4,14 +4,15 @@ import { userContext } from "./userContext";
 
 import { uniqBy } from "lodash";
 // import * as axios  from "axios";
-import axios, * as others from 'axios';
+import axios, * as others from "axios";
 
 export default function ChatView() {
   const [wsConnection, setwsConnection] = useState(null);
 
   const [onlinePeps, setOnlinePeps] = useState({});
+  const [offlinePeps, setOffilePeps] = useState({});
   const [selectedUserid, SetSelectedUserId] = useState("");
-  const { username, userId } = useContext(userContext);
+  const { username, userId,setUserNameContext,setUserId } = useContext(userContext);
   const [msg, setMsg] = useState("");
   const divUndermsg = useRef();
 
@@ -21,15 +22,15 @@ export default function ChatView() {
     // const ws = new WebSocket("ws://192.168.0.113:3000");
     // setwsConnection(ws);
     // ws.addEventListener("message", handleMessage);
-    coneectToWs()
+    coneectToWs();
   }, []);
 
   //this function prevent the client from being disconnet from sockets using recursion
-  function coneectToWs(){
+  function coneectToWs() {
     const ws = new WebSocket("ws://192.168.0.113:3000");
     setwsConnection(ws);
     ws.addEventListener("message", handleMessage);
-    ws.addEventListener("close",coneectToWs)
+    ws.addEventListener("close", coneectToWs);
   }
 
   function showOnline(users) {
@@ -45,8 +46,7 @@ export default function ChatView() {
     if (msgData.onLine) {
       showOnline(msgData.onLine);
     } else if ("text" in msgData) {
-      // console.log(msgData,'recoeved msg')
-      setMsgs((current) => [...current, { ...msgData,id:Date.now() }]);
+      setMsgs((current) => [...current, { ...msgData, id: Date.now() }]);
     }
   }
 
@@ -56,6 +56,14 @@ export default function ChatView() {
 
   const excludeMyId = { ...onlinePeps };
   delete excludeMyId[userId];
+
+  function logOut(){
+    axios.post('http://192.168.0.113:3000/logout').then(()=>{
+      setwsConnection(null)
+      setUserId(null);
+      setUserNameContext(null);
+    })
+  }
 
   function sendMsg(ev) {
     ev.preventDefault();
@@ -72,69 +80,112 @@ export default function ChatView() {
     setMsg("");
     setMsgs((current) => [
       ...current,
-      { text: msg, isMy: true, sender: userId, recipient: selectedUserid, id : Date.now() },
+      {
+        text: msg,
+        isMy: true,
+        sender: userId,
+        recipient: selectedUserid,
+        _id: Date.now(),
+      },
     ]);
-   
   }
 
-  useEffect(()=>{
-    const div =  divUndermsg.current;
-    if(div){
-      div.scrollIntoView({behavior:'smooth'})
+  useEffect(() => {
+    const div = divUndermsg.current;
+    if (div) {
+      div.scrollIntoView({ behavior: "smooth" });
     }
-   
-  },[msgs])
+  }, [msgs]);
 
-  useEffect(()=>{
-    if(selectedUserid){
-      axios.get('http://192.168.0.113:3000/messages/'+selectedUserid)
-      .then((res)=>{
-        console.log(res,'msg response')
-        setMsgs(res.data)
-      })
+  useEffect(() => {
+    if (selectedUserid) {
+      axios
+        .get("http://192.168.0.113:3000/messages/" + selectedUserid)
+        .then((res) => {
+          setMsgs(res.data);
+        });
     }
-  
-  },[selectedUserid])
+  }, [selectedUserid]);
 
+  useEffect(() => {
+    console.log('online check')
+    axios.get("http://192.168.0.113:3000/users").then((res) => {
+      const offlineArr = res.data.filter((u) => u._id !== userId);
+      const offline = {};
+      offlineArr.forEach((a) => {
+        if (!onlinePeps.hasOwnProperty(a._id)) {
+          offline[a._id] = a;
+        }
+      });
+      setOffilePeps(offline);
+    });
+  }, [onlinePeps]);
 
   let messageWithoutDuplicates = uniqBy(msgs, "_id");
-  console.log(messageWithoutDuplicates, "uniqu");
 
   return (
     <>
       <div className="flex h-dvh">
-        <div className="bg-white-100 w-1/3 pt-4">
-          <div className="text-blue-500 font-bold flex gap-2 mb-4">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              className="w-6 h-6"
-            >
-              <path
-                fillRule="evenodd"
-                d="M4.848 2.771A49.144 49.144 0 0 1 12 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 0 1-3.476.383.39.39 0 0 0-.297.17l-2.755 4.133a.75.75 0 0 1-1.248 0l-2.755-4.133a.39.39 0 0 0-.297-.17 48.9 48.9 0 0 1-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97ZM6.75 8.25a.75.75 0 0 1 .75-.75h9a.75.75 0 0 1 0 1.5h-9a.75.75 0 0 1-.75-.75Zm.75 2.25a.75.75 0 0 0 0 1.5H12a.75.75 0 0 0 0-1.5H7.5Z"
-                clipRule="evenodd"
-              />
-            </svg>
-            MERN Chat
-          </div>
-          <div>Logged In as {username}</div>
-          {Object.keys(excludeMyId).map((userId) => {
-            return (
-              <div
-                key={userId}
-                onClick={() => selectContact(userId)}
-                className={
-                  "pl-4 border-b border-gray-100 py-2 flex gap-2 items-center cursor-pointer " +
-                  (userId === selectedUserid ? "bg-blue-50" : "")
-                }
+        <div className="bg-white-100 w-1/3 pt-4 flex flex-col">
+          <div className="flex-grow">
+            <div className="text-blue-500 font-bold flex gap-2 mb-4">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="w-6 h-6"
               >
-                <Avatar username={excludeMyId[userId]} userId={userId} />
-                <span>{excludeMyId[userId]}</span>
-              </div>
-            );
-          })}
+                <path
+                  fillRule="evenodd"
+                  d="M4.848 2.771A49.144 49.144 0 0 1 12 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 0 1-3.476.383.39.39 0 0 0-.297.17l-2.755 4.133a.75.75 0 0 1-1.248 0l-2.755-4.133a.39.39 0 0 0-.297-.17 48.9 48.9 0 0 1-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97ZM6.75 8.25a.75.75 0 0 1 .75-.75h9a.75.75 0 0 1 0 1.5h-9a.75.75 0 0 1-.75-.75Zm.75 2.25a.75.75 0 0 0 0 1.5H12a.75.75 0 0 0 0-1.5H7.5Z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              MERN Chat
+            </div>
+            {Object.keys(excludeMyId).map((userId) => {
+              return (
+                <div
+                  key={userId}
+                  onClick={() => selectContact(userId)}
+                  className={
+                    "pl-4 border-b border-gray-100 py-2 flex gap-2 items-center cursor-pointer " +
+                    (userId === selectedUserid ? "bg-blue-50" : "")
+                  }
+                >
+                  <Avatar
+                    online={true}
+                    username={excludeMyId[userId]}
+                    userId={userId}
+                  />
+                  <span>{excludeMyId[userId]}</span>
+                </div>
+              );
+            })}
+            {Object.keys(offlinePeps).map((offlineuserId) => {
+              return (
+                <div
+                  key={offlineuserId}
+                  onClick={() => selectContact(offlineuserId)}
+                  className={
+                    "pl-4 border-b border-gray-100 py-2 flex gap-2 items-center cursor-pointer " +
+                    (offlineuserId === selectedUserid ? "bg-blue-50" : "")
+                  }
+                >
+                  <Avatar
+                    online={false}
+                    username={offlinePeps[offlineuserId].username}
+                    userId={offlineuserId}
+                  />
+                  <span>{offlinePeps[offlineuserId].username}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="p-2 text-center">
+           <span className="mr-2 text-sm text-gray-400"> Welcome, {username}</span>
+            <button className="text-sm text-gray-400 bg-blue-50 p-2 rounded-sm" onClick={logOut}>Logout</button>
+          </div>
         </div>
         <div className="bg-blue-50 w-2/3 flex flex-col">
           <div className="flex-grow">
@@ -166,7 +217,6 @@ export default function ChatView() {
                           </div>
                           <div ref={divUndermsg}></div>
                         </div>
-                        
                       );
                     })}
                   </div>
